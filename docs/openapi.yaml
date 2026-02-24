@@ -1,0 +1,860 @@
+openapi: 3.0.3
+info:
+  title: Adaptive Risk-Based Authentication & Device Trust Engine (AADE)
+  description: |
+    RESTful API for adaptive risk-based authentication with device trust management,
+    session management, and comprehensive audit logging.
+  version: 1.0.0
+  contact:
+    name: AADE Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Step-Up Authentication
+    description: Additional verification for privilege escalation
+  - name: Devices
+    description: Device recognition and trust management
+  - name: Sessions
+    description: Active session management
+  - name: Audit Logs
+    description: Security event logging and retrieval
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate a user with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - deviceInfo
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: SecurePassword123!
+                deviceInfo:
+                  $ref: '#/components/schemas/DeviceInfo'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AuthSuccessResponse'
+                  - $ref: '#/components/schemas/MFARequiredResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/mfa/verify:
+    post:
+      tags:
+        - Authentication
+      summary: Verify MFA code
+      description: Verify MFA code after initial authentication
+      operationId: verifyMFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+                - mfaCode
+                - deviceInfo
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  example: 550e8400-e29b-41d4-a716-446655440000
+                mfaCode:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: '123456'
+                deviceInfo:
+                  $ref: '#/components/schemas/DeviceInfo'
+      responses:
+        '200':
+          description: MFA verification successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: Refresh an expired access token using a refresh token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token refresh successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout
+      description: Terminate the current session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+                  example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/step-up/initiate:
+    post:
+      tags:
+        - Step-Up Authentication
+      summary: Initiate step-up verification
+      description: Start a step-up verification challenge to increase session trust level
+      operationId: initiateStepUp
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - method
+              properties:
+                method:
+                  $ref: '#/components/schemas/VerificationMethod'
+      responses:
+        '200':
+          description: Challenge initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/step-up/verify:
+    post:
+      tags:
+        - Step-Up Authentication
+      summary: Verify step-up OTP
+      description: Verify OTP for step-up authentication
+      operationId: verifyStepUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - challengeId
+                - otp
+              properties:
+                challengeId:
+                  type: string
+                  format: uuid
+                  example: 550e8400-e29b-41d4-a716-446655440000
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: '123456'
+      responses:
+        '200':
+          description: Verification successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/step-up/resend:
+    post:
+      tags:
+        - Step-Up Authentication
+      summary: Resend OTP
+      description: Resend OTP for an existing challenge
+      operationId: resendStepUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - challengeId
+              properties:
+                challengeId:
+                  type: string
+                  format: uuid
+                  example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: OTP resent successfully
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    example: '2024-01-15T10:30:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /devices:
+    get:
+      tags:
+        - Devices
+      summary: List devices
+      description: List all devices for the authenticated user
+      operationId: listDevices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Devices retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /devices/{id}/trust:
+    put:
+      tags:
+        - Devices
+      summary: Update device trust status
+      description: Update the trust status of a device
+      operationId: updateDeviceTrust
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - trustStatus
+              properties:
+                trustStatus:
+                  $ref: '#/components/schemas/TrustStatus'
+      responses:
+        '200':
+          description: Trust status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Device trust status updated
+                  device:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      trustStatus:
+                        $ref: '#/components/schemas/TrustStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /devices/{id}:
+    delete:
+      tags:
+        - Devices
+      summary: Revoke device
+      description: Revoke a device and invalidate all its sessions
+      operationId: revokeDevice
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Device revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Device revoked successfully
+                  sessionsInvalidated:
+                    type: integer
+                    example: 2
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions:
+    get:
+      tags:
+        - Sessions
+      summary: List sessions
+      description: List all active sessions for the authenticated user
+      operationId: listSessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sessions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sessions/{id}:
+    delete:
+      tags:
+        - Sessions
+      summary: Terminate session
+      description: Terminate a specific session
+      operationId: terminateSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Session terminated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Session terminated successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /audit-logs:
+    get:
+      tags:
+        - Audit Logs
+      summary: Get audit logs
+      description: Retrieve audit logs for the authenticated user with optional filters
+      operationId: getAuditLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: eventType
+          in: query
+          schema:
+            type: string
+            enum:
+              - LOGIN_ATTEMPT
+              - RISK_EVALUATION
+              - DEVICE_CHANGE
+              - SUSPICIOUS_ACTIVITY
+              - STEP_UP_ATTEMPT
+          example: LOGIN_ATTEMPT
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          example: '2024-01-01T00:00:00Z'
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          example: '2024-01-31T23:59:59Z'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          example: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DeviceInfo:
+      type: object
+      required:
+        - userAgent
+      properties:
+        userAgent:
+          type: string
+          example: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+        screenResolution:
+          type: string
+          example: 1920x1080
+        timezone:
+          type: string
+          example: America/New_York
+        language:
+          type: string
+          example: en-US
+
+    SessionTrustLevel:
+      type: string
+      enum:
+        - FULL_TRUST
+        - LIMITED_TRUST
+        - UNVERIFIED
+        - HIGH_RISK
+      example: FULL_TRUST
+
+    TrustStatus:
+      type: string
+      enum:
+        - TRUSTED
+        - UNTRUSTED
+        - PENDING
+      example: TRUSTED
+
+    VerificationMethod:
+      type: string
+      enum:
+        - EMAIL_OTP
+        - SMS_OTP
+        - AUTHENTICATOR_APP
+      example: EMAIL_OTP
+
+    AuthSuccessResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        trustLevel:
+          $ref: '#/components/schemas/SessionTrustLevel'
+        expiresIn:
+          type: integer
+          example: 900
+        requiresMFA:
+          type: boolean
+          example: false
+
+    MFARequiredResponse:
+      type: object
+      properties:
+        requiresMFA:
+          type: boolean
+          example: true
+        userId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        message:
+          type: string
+          example: MFA verification required
+
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        expiresIn:
+          type: integer
+          example: 900
+
+    ChallengeResponse:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        method:
+          $ref: '#/components/schemas/VerificationMethod'
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:20:00Z'
+        attemptsRemaining:
+          type: integer
+          example: 3
+
+    VerificationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        newTrustLevel:
+          $ref: '#/components/schemas/SessionTrustLevel'
+        message:
+          type: string
+          example: Verification successful
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        identity:
+          type: string
+          example: a1b2c3d4e5f6...
+        trustStatus:
+          $ref: '#/components/schemas/TrustStatus'
+        revoked:
+          type: boolean
+          example: false
+        firstSeen:
+          type: string
+          format: date-time
+          example: '2024-01-01T10:00:00Z'
+        lastSeen:
+          type: string
+          format: date-time
+          example: '2024-01-15T09:30:00Z'
+        metadata:
+          type: object
+          properties:
+            deviceType:
+              type: string
+              example: desktop
+            browser:
+              type: string
+              example: Chrome 120.0
+            operatingSystem:
+              type: string
+              example: Windows 10
+            lastIpAddress:
+              type: string
+              example: 192.168.1.100
+
+    SessionInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        trustLevel:
+          $ref: '#/components/schemas/SessionTrustLevel'
+        deviceIdentity:
+          type: string
+          example: a1b2c3d4e5f6...
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T09:00:00Z'
+        lastActivity:
+          type: string
+          format: date-time
+          example: '2024-01-15T09:30:00Z'
+        ipAddress:
+          type: string
+          example: 192.168.1.100
+        current:
+          type: boolean
+          example: true
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        timestamp:
+          type: string
+          format: date-time
+          example: '2024-01-15T09:30:00Z'
+        eventType:
+          type: string
+          example: LOGIN_ATTEMPT
+        success:
+          type: boolean
+          example: true
+        details:
+          type: object
+          additionalProperties: true
+
+    AuditLogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        total:
+          type: integer
+          example: 2
+        limit:
+          type: integer
+          example: 100
+        offset:
+          type: integer
+          example: 0
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: invalid_input
+        message:
+          type: string
+          example: Invalid request parameters
+        details:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: invalid_input
+            message: Invalid request parameters
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: invalid_credentials
+            message: Invalid email or password
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: insufficient_trust
+            message: Session trust level insufficient for operation
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: resource_not_found
+            message: Requested resource does not exist
+
+    TooManyRequests:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          example: 300
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          example: 100
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          example: 0
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          example: 1705315200
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: rate_limit_exceeded
+            message: Too many requests, please try again later
+            details:
+              retryAfter: 300

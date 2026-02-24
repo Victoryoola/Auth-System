@@ -20,6 +20,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # IDE
+.42c
 .kiro/
 .vscode/
 .idea/
