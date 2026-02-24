@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { AccountController, updatePreferencesValidation } from '../controllers/accountController';
 import { AccountService } from '../services/AccountService';
 
@@ -13,13 +13,13 @@ export function createAccountRoutes(accountService: AccountService): Router {
    * DELETE /account
    * Delete user account and all associated data
    */
-  router.delete('/', (req, res) => controller.deleteAccount(req, res));
+  router.delete('/', (req: Request, res: Response) => controller.deleteAccount(req, res));
 
   /**
    * PUT /account/preferences
    * Update user preferences (device tracking opt-out)
    */
-  router.put('/preferences', updatePreferencesValidation, (req, res) =>
+  router.put('/preferences', updatePreferencesValidation, (req: Request, res: Response) =>
     controller.updatePreferences(req, res)
   );
 

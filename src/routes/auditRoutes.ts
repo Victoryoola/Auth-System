@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { AuditController, auditLogsValidation } from '../controllers/auditController';
 import { AuditLogger } from '../services/AuditLogger';
 import { AccessControlMiddleware } from '../middleware/accessControl';
@@ -22,7 +22,7 @@ export function createAuditRoutes(
     '/',
     accessControl.requireVerified,
     auditLogsValidation,
-    (req, res) => controller.getLogs(req, res)
+    (req: Request, res: Response) => controller.getLogs(req, res)
   );
 
   return router;

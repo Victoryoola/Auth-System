@@ -44,7 +44,7 @@ class MockRedisClient {
 describe('SessionManager', () => {
   let sessionManager: SessionManager;
   let mockRedis: MockRedisClient;
-  const testUserId = 'test-user-123';
+  const testUserId = '550e8400-e29b-41d4-a716-446655440000'; // Valid UUID
   const testDeviceIdentity = 'device-abc-123';
   const testIpAddress = '192.168.1.1';
 
@@ -56,6 +56,14 @@ describe('SessionManager', () => {
   beforeEach(async () => {
     mockRedis = new MockRedisClient();
     sessionManager = new SessionManager(privateKey, publicKey, mockRedis as any);
+
+    // Create test user if not exists
+    await pool.query(
+      `INSERT INTO users (id, email, password_hash) 
+       VALUES ($1, $2, $3) 
+       ON CONFLICT (id) DO NOTHING`,
+      [testUserId, 'test@example.com', 'dummy_hash']
+    );
 
     // Clean up test data
     await pool.query('DELETE FROM sessions WHERE user_id = $1', [testUserId]);
@@ -365,7 +373,8 @@ describe('SessionManager', () => {
     });
 
     it('should return empty array for user with no sessions', async () => {
-      const sessions = await sessionManager.getActiveSessions('non-existent-user');
+      const nonExistentUserId = '660e8400-e29b-41d4-a716-446655440001'; // Different UUID
+      const sessions = await sessionManager.getActiveSessions(nonExistentUserId);
 
       expect(sessions).toEqual([]);
     });

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { StepUpController, initiateValidation, verifyValidation, resendValidation } from '../controllers/stepUpController';
 import { StepUpVerifier } from '../services/StepUpVerifier';
 import { AccessControlMiddleware } from '../middleware/accessControl';
@@ -22,7 +22,7 @@ export function createStepUpRoutes(
     '/initiate',
     accessControl.requireVerified,
     initiateValidation,
-    (req, res) => controller.initiate(req, res)
+    (req: Request, res: Response) => controller.initiate(req, res)
   );
 
   /**
@@ -30,14 +30,14 @@ export function createStepUpRoutes(
    * Verify OTP for step-up authentication
    * No authentication required (challenge ID is sufficient)
    */
-  router.post('/verify', verifyValidation, (req, res) => controller.verify(req, res));
+  router.post('/verify', verifyValidation, (req: Request, res: Response) => controller.verify(req, res));
 
   /**
    * POST /auth/step-up/resend
    * Resend OTP for existing challenge
    * No authentication required (challenge ID is sufficient)
    */
-  router.post('/resend', resendValidation, (req, res) => controller.resend(req, res));
+  router.post('/resend', resendValidation, (req: Request, res: Response) => controller.resend(req, res));
 
   return router;
 }

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { SessionController, sessionIdValidation } from '../controllers/sessionController';
 import { SessionManager } from '../services/SessionManager';
 import { AccessControlMiddleware } from '../middleware/accessControl';
@@ -18,7 +18,7 @@ export function createSessionRoutes(
    * List all active sessions for the authenticated user
    * Requires authenticated session (any trust level except HIGH_RISK)
    */
-  router.get('/', accessControl.requireVerified, (req, res) => controller.listSessions(req, res));
+  router.get('/', accessControl.requireVerified, (req: Request, res: Response) => controller.listSessions(req, res));
 
   /**
    * DELETE /sessions/:id
@@ -29,7 +29,7 @@ export function createSessionRoutes(
     '/:id',
     accessControl.requireVerified,
     sessionIdValidation,
-    (req, res) => controller.terminateSession(req, res)
+    (req: Request, res: Response) => controller.terminateSession(req, res)
   );
 
   return router;
