@@ -4,6 +4,7 @@ import { pool } from '../config/database';
 import { DeviceRegistry } from './DeviceRegistry';
 import { RiskEngine } from './RiskEngine';
 import { SessionManager } from './SessionManager';
+import { MetricsService } from './MetricsService';
 import { DeviceInfo } from '../types/device';
 import { SessionTrustLevel } from '../types/enums';
 import { User } from '../models/User';
@@ -45,6 +46,7 @@ export class AuthService {
   private deviceRegistry: DeviceRegistry;
   private riskEngine: RiskEngine;
   private sessionManager: SessionManager;
+  private metricsService?: MetricsService;
   private ipRateLimits: Map<string, RateLimitEntry>;
   private readonly MAX_FAILED_ATTEMPTS = 5;
   private readonly RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
@@ -53,11 +55,13 @@ export class AuthService {
   constructor(
     deviceRegistry: DeviceRegistry,
     riskEngine: RiskEngine,
-    sessionManager: SessionManager
+    sessionManager: SessionManager,
+    metricsService?: MetricsService
   ) {
     this.deviceRegistry = deviceRegistry;
     this.riskEngine = riskEngine;
     this.sessionManager = sessionManager;
+    this.metricsService = metricsService;
     this.ipRateLimits = new Map();
   }
 
@@ -132,6 +136,8 @@ export class AuthService {
       // Increment failed login attempts
       await this.incrementFailedAttempts(user.id);
       this.recordFailedAttempt(ipAddress);
+      // Record failed authentication attempt
+      this.metricsService?.recordAuthAttempt('failure', 'password');
       throw new Error('Invalid credentials');
     }
 
@@ -182,6 +188,10 @@ export class AuthService {
     // Update last login timestamp
     await this.updateLastLogin(user.id);
 
+    // Record successful authentication
+    this.metricsService?.recordAuthAttempt('success', 'password');
+    this.metricsService?.recordSessionCreation(riskScore.trustLevel);
+
     return {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
@@ -221,6 +231,8 @@ export class AuthService {
     if (!isValid) {
       // Increment failed attempts
       await this.incrementFailedAttempts(user.id);
+      // Record failed MFA attempt
+      this.metricsService?.recordAuthAttempt('failure', 'mfa');
       throw new Error('Invalid MFA code');
     }
 
@@ -257,6 +269,10 @@ export class AuthService {
 
     // Update last login timestamp
     await this.updateLastLogin(user.id);
+
+    // Record successful MFA authentication
+    this.metricsService?.recordAuthAttempt('success', 'mfa');
+    this.metricsService?.recordSessionCreation(riskScore.trustLevel);
 
     return {
       accessToken: session.accessToken,

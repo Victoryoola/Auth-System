@@ -15,10 +15,13 @@ import { AuthService } from './services/AuthService';
 import { StepUpVerifier } from './services/StepUpVerifier';
 import { AuditLogger } from './services/AuditLogger';
 import { AccountService } from './services/AccountService';
+import { MetricsService } from './services/MetricsService';
+import { HealthCheckService } from './services/HealthCheckService';
 
 // Middleware
 import { createAccessControlMiddleware } from './middleware/accessControl';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { createMetricsMiddleware } from './middleware/metricsMiddleware';
 
 // Routes
 import { createAuthRoutes } from './routes/authRoutes';
@@ -27,6 +30,8 @@ import { createDeviceRoutes } from './routes/deviceRoutes';
 import { createSessionRoutes } from './routes/sessionRoutes';
 import { createAuditRoutes } from './routes/auditRoutes';
 import { createAccountRoutes } from './routes/accountRoutes';
+import { createMetricsRoutes } from './routes/metricsRoutes';
+import { createHealthRoutes } from './routes/healthRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -51,13 +56,26 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
+// Initialize metrics service early
+const metricsService = new MetricsService();
+
+// Metrics middleware (track all API requests)
+app.use(createMetricsMiddleware(metricsService));
+
+// Rate limiting with metrics tracking
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    metricsService.recordRateLimitTrigger(req.path);
+    res.status(429).json({
+      error: 'rate_limit_exceeded',
+      message: 'Too many requests from this IP, please try again later.',
+    });
+  },
 });
 app.use('/api/', limiter);
 
@@ -68,11 +86,13 @@ const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-});
-
-// Health check endpoint
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  handler: (_req, res) => {
+    metricsService.recordRateLimitTrigger('/api/auth');
+    res.status(429).json({
+      error: 'rate_limit_exceeded',
+      message: 'Too many authentication attempts, please try again later.',
+    });
+  },
 });
 
 // Initialize services
@@ -96,12 +116,13 @@ function initializeServices() {
 
   // Initialize service instances
   const deviceRegistry = new DeviceRegistry();
-  const riskEngine = new RiskEngine(deviceRegistry);
+  const riskEngine = new RiskEngine(deviceRegistry, metricsService);
   const sessionManager = new SessionManager(privateKey, publicKey);
-  const authService = new AuthService(deviceRegistry, riskEngine, sessionManager);
+  const authService = new AuthService(deviceRegistry, riskEngine, sessionManager, metricsService);
   const stepUpVerifier = new StepUpVerifier(sessionManager);
   const auditLogger = new AuditLogger();
   const accountService = new AccountService();
+  const healthCheckService = new HealthCheckService();
 
   // Create access control middleware
   const accessControl = createAccessControlMiddleware(sessionManager);
@@ -115,11 +136,16 @@ function initializeServices() {
     auditLogger,
     accountService,
     accessControl,
+    metricsService,
+    healthCheckService,
   };
 }
 
 // Initialize services and routes
 const services = initializeServices();
+
+// Health check routes (before other routes, no rate limiting)
+app.use('/', createHealthRoutes(services.healthCheckService));
 
 // API Routes
 app.use('/api/auth', authLimiter, createAuthRoutes(services.authService, services.sessionManager));
@@ -128,6 +154,9 @@ app.use('/api/devices', createDeviceRoutes(services.deviceRegistry, services.ses
 app.use('/api/sessions', createSessionRoutes(services.sessionManager, services.accessControl));
 app.use('/api/audit-logs', createAuditRoutes(services.auditLogger, services.accessControl));
 app.use('/api/account', createAccountRoutes(services.accountService));
+
+// Metrics endpoint (for Prometheus scraping)
+app.use('/metrics', createMetricsRoutes(services.metricsService));
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

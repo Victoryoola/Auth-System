@@ -1,6 +1,7 @@
 import { pool } from '../config/database';
 import { SessionTrustLevel } from '../types/enums';
 import { DeviceRegistry } from './DeviceRegistry';
+import { MetricsService } from './MetricsService';
 
 /**
  * Authentication context for risk evaluation
@@ -53,11 +54,13 @@ interface IPReputationResult {
  */
 export class RiskEngine {
   private deviceRegistry: DeviceRegistry;
+  private metricsService?: MetricsService;
   private ipReputationCache: Map<string, { result: IPReputationResult; timestamp: number }>;
   private readonly IP_CACHE_TTL = 3600000; // 1 hour in milliseconds
 
-  constructor(deviceRegistry: DeviceRegistry) {
+  constructor(deviceRegistry: DeviceRegistry, metricsService?: MetricsService) {
     this.deviceRegistry = deviceRegistry;
+    this.metricsService = metricsService;
     this.ipReputationCache = new Map();
   }
 
@@ -132,6 +135,9 @@ export class RiskEngine {
     if (elapsedTime > 200) {
       console.warn(`Risk evaluation took ${elapsedTime}ms, exceeding 200ms target`);
     }
+
+    // Record risk score metrics
+    this.metricsService?.recordRiskScore(totalScore, trustLevel);
 
     return {
       score: totalScore,
