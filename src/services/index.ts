@@ -3,3 +3,4 @@ export * from './AuthService';
 export * from './DeviceRegistry';
 export * from './RiskEngine';
 export * from './SessionManager';
+export * from './StepUpVerifier';
