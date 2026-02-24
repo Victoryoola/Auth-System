@@ -151,10 +151,10 @@ export class AuthService {
       };
     }
 
-    // Generate device identity
-    const deviceIdentity = this.deviceRegistry.generateIdentity(deviceInfo);
+    // Generate device identity (may be null if user opted out)
+    const deviceIdentity = await this.deviceRegistry.generateIdentity(deviceInfo, user.id);
 
-    // Register or update device
+    // Register or update device (only if tracking is enabled)
     await this.deviceRegistry.registerDevice(user.id, deviceIdentity, {
       deviceType: this.extractDeviceType(deviceInfo.userAgent),
       browser: this.extractBrowser(deviceInfo.userAgent),
@@ -162,10 +162,10 @@ export class AuthService {
       lastIpAddress: ipAddress,
     });
 
-    // Calculate risk score
+    // Calculate risk score (use empty string for device identity if opted out)
     const riskScore = await this.riskEngine.calculateRiskScore({
       userId: user.id,
-      deviceIdentity,
+      deviceIdentity: deviceIdentity || '',
       ipAddress,
       timestamp: new Date(),
       failedAttempts: user.failedLoginAttempts,
@@ -175,7 +175,7 @@ export class AuthService {
     const session = await this.sessionManager.createSession(
       user.id,
       riskScore.trustLevel,
-      deviceIdentity,
+      deviceIdentity || '',
       ipAddress
     );
 
@@ -227,10 +227,10 @@ export class AuthService {
     // Reset failed attempts
     await this.resetFailedAttempts(user.id);
 
-    // Generate device identity
-    const deviceIdentity = this.deviceRegistry.generateIdentity(deviceInfo);
+    // Generate device identity (may be null if user opted out)
+    const deviceIdentity = await this.deviceRegistry.generateIdentity(deviceInfo, user.id);
 
-    // Register or update device
+    // Register or update device (only if tracking is enabled)
     await this.deviceRegistry.registerDevice(user.id, deviceIdentity, {
       deviceType: this.extractDeviceType(deviceInfo.userAgent),
       browser: this.extractBrowser(deviceInfo.userAgent),
@@ -238,10 +238,10 @@ export class AuthService {
       lastIpAddress: deviceInfo.ipAddress,
     });
 
-    // Calculate risk score
+    // Calculate risk score (use empty string for device identity if opted out)
     const riskScore = await this.riskEngine.calculateRiskScore({
       userId: user.id,
-      deviceIdentity,
+      deviceIdentity: deviceIdentity || '',
       ipAddress: deviceInfo.ipAddress,
       timestamp: new Date(),
       failedAttempts: user.failedLoginAttempts,
@@ -251,7 +251,7 @@ export class AuthService {
     const session = await this.sessionManager.createSession(
       user.id,
       riskScore.trustLevel,
-      deviceIdentity,
+      deviceIdentity || '',
       deviceInfo.ipAddress
     );
 
@@ -435,6 +435,7 @@ export class AuthService {
       passwordHash: row.password_hash,
       mfaEnabled: row.mfa_enabled,
       mfaSecret: row.mfa_secret,
+      deviceTrackingEnabled: row.device_tracking_enabled ?? true,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
       lastLoginAt: row.last_login_at ? new Date(row.last_login_at) : undefined,

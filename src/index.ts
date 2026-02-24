@@ -14,6 +14,7 @@ import { SessionManager } from './services/SessionManager';
 import { AuthService } from './services/AuthService';
 import { StepUpVerifier } from './services/StepUpVerifier';
 import { AuditLogger } from './services/AuditLogger';
+import { AccountService } from './services/AccountService';
 
 // Middleware
 import { createAccessControlMiddleware } from './middleware/accessControl';
@@ -25,6 +26,7 @@ import { createStepUpRoutes } from './routes/stepUpRoutes';
 import { createDeviceRoutes } from './routes/deviceRoutes';
 import { createSessionRoutes } from './routes/sessionRoutes';
 import { createAuditRoutes } from './routes/auditRoutes';
+import { createAccountRoutes } from './routes/accountRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -99,6 +101,7 @@ function initializeServices() {
   const authService = new AuthService(deviceRegistry, riskEngine, sessionManager);
   const stepUpVerifier = new StepUpVerifier(sessionManager);
   const auditLogger = new AuditLogger();
+  const accountService = new AccountService();
 
   // Create access control middleware
   const accessControl = createAccessControlMiddleware(sessionManager);
@@ -110,6 +113,7 @@ function initializeServices() {
     authService,
     stepUpVerifier,
     auditLogger,
+    accountService,
     accessControl,
   };
 }
@@ -123,6 +127,7 @@ app.use('/api/auth/step-up', createStepUpRoutes(services.stepUpVerifier, service
 app.use('/api/devices', createDeviceRoutes(services.deviceRegistry, services.sessionManager, services.accessControl));
 app.use('/api/sessions', createSessionRoutes(services.sessionManager, services.accessControl));
 app.use('/api/audit-logs', createAuditRoutes(services.auditLogger, services.accessControl));
+app.use('/api/account', createAccountRoutes(services.accountService));
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

@@ -161,7 +161,7 @@ describe('AuthService', () => {
         mockPool.query.mockResolvedValueOnce({ rows: [] }); // Update last login
 
         // Mock device registry
-        mockDeviceRegistry.generateIdentity.mockReturnValue('device-123');
+        mockDeviceRegistry.generateIdentity.mockResolvedValue('device-123');
         mockDeviceRegistry.registerDevice.mockResolvedValue({} as any);
 
         // Mock risk engine
@@ -196,7 +196,7 @@ describe('AuthService', () => {
         expect(result.refreshToken).toBe('refresh-token');
         expect(result.trustLevel).toBe(SessionTrustLevel.FULL_TRUST);
         expect(result.requiresMFA).toBe(false);
-        expect(mockDeviceRegistry.generateIdentity).toHaveBeenCalledWith(mockDeviceInfo);
+        expect(mockDeviceRegistry.generateIdentity).toHaveBeenCalledWith(mockDeviceInfo, 'user-123');
         expect(mockRiskEngine.calculateRiskScore).toHaveBeenCalled();
         expect(mockSessionManager.createSession).toHaveBeenCalled();
       });
@@ -305,7 +305,7 @@ describe('AuthService', () => {
         mockPool.query.mockResolvedValueOnce({ rows: [] }); // Reset failed attempts
         mockPool.query.mockResolvedValueOnce({ rows: [] }); // Update last login
 
-        mockDeviceRegistry.generateIdentity.mockReturnValue('device-123');
+        mockDeviceRegistry.generateIdentity.mockResolvedValue('device-123');
         mockDeviceRegistry.registerDevice.mockResolvedValue({} as any);
 
         mockRiskEngine.calculateRiskScore.mockResolvedValue({
@@ -473,7 +473,7 @@ describe('AuthService', () => {
       mockPool.query.mockResolvedValueOnce({ rows: [] }); // Reset failed attempts
       mockPool.query.mockResolvedValueOnce({ rows: [] }); // Update last login
 
-      mockDeviceRegistry.generateIdentity.mockReturnValue('device-123');
+      mockDeviceRegistry.generateIdentity.mockResolvedValue('device-123');
       mockDeviceRegistry.registerDevice.mockResolvedValue({} as any);
 
       mockRiskEngine.calculateRiskScore.mockResolvedValue({

@@ -13,11 +13,21 @@ export class DeviceRegistry {
    * Generate a unique device identity using SHA-256 hash
    * Combines device characteristics: User-Agent, screen resolution, timezone, language
    * Handles missing or partial device information gracefully
+   * Returns null if user has opted out of device tracking
    * 
    * @param deviceInfo - Device characteristics
-   * @returns SHA-256 hash of device characteristics
+   * @param userId - User ID (optional, for checking opt-out preference)
+   * @returns SHA-256 hash of device characteristics or null if opted out
    */
-  generateIdentity(deviceInfo: DeviceInfo): string {
+  async generateIdentity(deviceInfo: DeviceInfo, userId?: string): Promise<string | null> {
+    // Check if user has opted out of device tracking
+    if (userId) {
+      const optedOut = await this.hasOptedOutOfTracking(userId);
+      if (optedOut) {
+        return null;
+      }
+    }
+
     // Extract device characteristics, using empty string for missing values
     const userAgent = deviceInfo.userAgent || '';
     const screenRes = deviceInfo.screenResolution || '';
@@ -36,17 +46,23 @@ export class DeviceRegistry {
 
   /**
    * Register a new device or update existing device
+   * Returns null if user has opted out of device tracking
    * 
    * @param userId - User ID
    * @param identity - Device identity hash
    * @param metadata - Device metadata
-   * @returns Registered device
+   * @returns Registered device or null if opted out
    */
   async registerDevice(
     userId: string,
-    identity: string,
+    identity: string | null,
     metadata: DeviceMetadata
-  ): Promise<Device> {
+  ): Promise<Device | null> {
+    // If identity is null, user has opted out of device tracking
+    if (identity === null) {
+      return null;
+    }
+
     const client = await pool.connect();
     
     try {
@@ -232,4 +248,21 @@ export class DeviceRegistry {
       },
     };
   }
+  /**
+   * Check if user has opted out of device tracking
+   *
+   * @param userId - User ID
+   * @returns True if user has opted out
+   */
+  private async hasOptedOutOfTracking(userId: string): Promise<boolean> {
+    const query = 'SELECT device_tracking_enabled FROM users WHERE id = $1';
+    const result = await pool.query(query, [userId]);
+
+    if (result.rows.length === 0) {
+      return false; // Default to tracking enabled if user not found
+    }
+
+    return !result.rows[0].device_tracking_enabled;
+  }
+
 }

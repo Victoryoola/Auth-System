@@ -7,6 +7,7 @@ export interface User {
   passwordHash: string;
   mfaEnabled: boolean;
   mfaSecret?: string;
+  deviceTrackingEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   lastLoginAt?: Date;
@@ -24,6 +25,7 @@ export interface CreateUserInput {
   passwordHash: string;
   mfaEnabled?: boolean;
   mfaSecret?: string;
+  deviceTrackingEnabled?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export interface UpdateUserInput {
   passwordHash?: string;
   mfaEnabled?: boolean;
   mfaSecret?: string;
+  deviceTrackingEnabled?: boolean;
   lastLoginAt?: Date;
   failedLoginAttempts?: number;
   lastFailedLoginAt?: Date;

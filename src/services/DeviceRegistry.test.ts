@@ -9,7 +9,7 @@ describe('DeviceRegistry', () => {
   });
 
   describe('generateIdentity', () => {
-    it('should generate consistent identity for same device info', () => {
+    it('should generate consistent identity for same device info', async () => {
       const deviceInfo: DeviceInfo = {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         ipAddress: '192.168.1.1',
@@ -18,14 +18,14 @@ describe('DeviceRegistry', () => {
         language: 'en-US',
       };
 
-      const identity1 = deviceRegistry.generateIdentity(deviceInfo);
-      const identity2 = deviceRegistry.generateIdentity(deviceInfo);
+      const identity1 = await deviceRegistry.generateIdentity(deviceInfo);
+      const identity2 = await deviceRegistry.generateIdentity(deviceInfo);
 
       expect(identity1).toBe(identity2);
       expect(identity1).toHaveLength(64); // SHA-256 produces 64 hex characters
     });
 
-    it('should generate different identities for different device info', () => {
+    it('should generate different identities for different device info', async () => {
       const deviceInfo1: DeviceInfo = {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         ipAddress: '192.168.1.1',
@@ -42,31 +42,31 @@ describe('DeviceRegistry', () => {
         language: 'en-US',
       };
 
-      const identity1 = deviceRegistry.generateIdentity(deviceInfo1);
-      const identity2 = deviceRegistry.generateIdentity(deviceInfo2);
+      const identity1 = await deviceRegistry.generateIdentity(deviceInfo1);
+      const identity2 = await deviceRegistry.generateIdentity(deviceInfo2);
 
       expect(identity1).not.toBe(identity2);
     });
 
-    it('should handle missing optional fields gracefully', () => {
+    it('should handle missing optional fields gracefully', async () => {
       const deviceInfo: DeviceInfo = {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         ipAddress: '192.168.1.1',
       };
 
-      const identity = deviceRegistry.generateIdentity(deviceInfo);
+      const identity = await deviceRegistry.generateIdentity(deviceInfo);
 
       expect(identity).toBeDefined();
       expect(identity).toHaveLength(64);
     });
 
-    it('should handle empty user agent', () => {
+    it('should handle empty user agent', async () => {
       const deviceInfo: DeviceInfo = {
         userAgent: '',
         ipAddress: '192.168.1.1',
       };
 
-      const identity = deviceRegistry.generateIdentity(deviceInfo);
+      const identity = await deviceRegistry.generateIdentity(deviceInfo);
 
       expect(identity).toBeDefined();
       expect(identity).toHaveLength(64);
