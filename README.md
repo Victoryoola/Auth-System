@@ -48,8 +48,8 @@ AADE provides sophisticated risk-based authentication that adapts to user behavi
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/aade.git
-cd aade
+git clone git@github.com:Victoryoola/Auth-System.git
+cd authsystem
 
 # Install dependencies
 npm install
