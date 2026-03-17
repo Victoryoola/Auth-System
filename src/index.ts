@@ -6,6 +6,8 @@ import { Server } from 'http';
 import rateLimit from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
 
 // Services
 import { DeviceRegistry } from './services/DeviceRegistry';
@@ -38,6 +40,10 @@ dotenv.config();
 
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
+
+// Load OpenAPI specification
+const openApiPath = path.join(__dirname, '../docs/openapi.yaml');
+const swaggerDocument = YAML.load(openApiPath);
 
 // Security middleware
 app.use(helmet());
@@ -146,6 +152,12 @@ const services = initializeServices();
 
 // Health check routes (before other routes, no rate limiting)
 app.use('/', createHealthRoutes(services.healthCheckService));
+
+// Swagger UI documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'AADE API Documentation',
+}));
 
 // API Routes
 app.use('/api/auth', authLimiter, createAuthRoutes(services.authService, services.sessionManager));
