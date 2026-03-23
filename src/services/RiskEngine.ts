@@ -86,7 +86,7 @@ export class RiskEngine {
     // Evaluate failed attempts (synchronous)
     const failedAttemptsScore = this.evaluateFailedAttempts(context.failedAttempts);
 
-    // Calculate total risk score
+    // Calculate total trust score (higher = more trusted, max 100)
     const totalScore =
       deviceFamiliarityScore +
       geographicAnomalyScore +
@@ -136,7 +136,7 @@ export class RiskEngine {
       console.warn(`Risk evaluation took ${elapsedTime}ms, exceeding 200ms target`);
     }
 
-    // Record risk score metrics
+    // Record trust score metrics
     this.metricsService?.recordRiskScore(totalScore, trustLevel);
 
     return {
@@ -147,37 +147,37 @@ export class RiskEngine {
   }
 
   /**
-   * Evaluate device familiarity risk factor
-   * - Unknown device: +30
-   * - Known but not trusted: +15
-   * - Trusted device: +0
+   * Evaluate device familiarity trust factor
+   * - Trusted device: +40
+   * - Known but not trusted: +20
+   * - Unknown device: +0
    */
   async evaluateDeviceFamiliarity(deviceIdentity: string, userId: string): Promise<number> {
     try {
       const isTrusted = await this.deviceRegistry.isDeviceTrusted(deviceIdentity, userId);
       
       if (isTrusted) {
-        return 0; // Trusted device
+        return 40; // Trusted device
       }
 
       // Check if device is known (exists for this user)
       const device = await this.deviceRegistry.getDevice(deviceIdentity);
       if (device && device.userId === userId) {
-        return 15; // Known but not trusted
+        return 20; // Known but not trusted
       }
 
-      return 30; // Unknown device
+      return 0; // Unknown device
     } catch (error) {
       console.error('Error evaluating device familiarity:', error);
-      return 15; // Conservative default: treat as known but not trusted
+      return 20; // Conservative default: treat as known but not trusted
     }
   }
 
   /**
-   * Evaluate geographic anomaly risk factor
-   * - Same country as usual: +0
-   * - Different country: +20
-   * - High-risk country: +30
+   * Evaluate geographic anomaly trust factor
+   * - Same country as usual: +30
+   * - Different country: +10
+   * - High-risk country: +0
    */
   async evaluateGeographicAnomaly(ipAddress: string, userId: string): Promise<number> {
     try {
@@ -189,31 +189,31 @@ export class RiskEngine {
 
       // If no history, treat as normal (first login or no data)
       if (!typicalCountry) {
-        return currentLocation.isHighRisk ? 30 : 0;
+        return currentLocation.isHighRisk ? 0 : 30;
       }
 
       // Check if high-risk country
       if (currentLocation.isHighRisk) {
-        return 30;
+        return 0;
       }
 
       // Check if different country
       if (currentLocation.country !== typicalCountry) {
-        return 20;
+        return 10;
       }
 
-      return 0; // Same country as usual
+      return 30; // Same country as usual
     } catch (error) {
       console.error('Error evaluating geographic anomaly:', error);
-      return 0; // Fail open: don't penalize if geolocation fails
+      return 30; // Fail open: don't penalize if geolocation fails
     }
   }
 
   /**
-   * Evaluate IP reputation risk factor
-   * - Clean IP: +0
+   * Evaluate IP reputation trust factor
+   * - Clean IP: +20
    * - Proxy/VPN: +10
-   * - Known malicious: +40
+   * - Known malicious: +0
    */
   async evaluateIPReputation(ipAddress: string): Promise<number> {
     try {
@@ -240,10 +240,10 @@ export class RiskEngine {
   }
 
   /**
-   * Evaluate login velocity risk factor
-   * - Normal pattern: +0
-   * - Multiple logins in 5 min: +15
-   * - Multiple logins in 1 min: +30
+   * Evaluate login velocity trust factor
+   * - Normal pattern: +10
+   * - Multiple logins in 5 min: +5
+   * - Multiple logins in 1 min: +0
    */
   async evaluateLoginVelocity(userId: string): Promise<number> {
     try {
@@ -266,53 +266,53 @@ export class RiskEngine {
 
       // Multiple logins in 1 minute
       if (count1min >= 2) {
-        return 30;
+        return 0;
       }
 
       // Multiple logins in 5 minutes
       if (count5min >= 2) {
-        return 15;
+        return 5;
       }
 
-      return 0; // Normal pattern
+      return 10; // Normal pattern
     } catch (error) {
       console.error('Error evaluating login velocity:', error);
-      return 0; // Fail open: don't penalize if velocity check fails
+      return 10; // Fail open: don't penalize if velocity check fails
     }
   }
 
   /**
-   * Evaluate failed attempts risk factor
-   * - 0 recent failures: +0
-   * - 1-2 failures: +10
-   * - 3-5 failures: +25
-   * - 6+ failures: +40
+   * Evaluate failed attempts trust factor
+   * - 0 recent failures: +0 penalty (full score)
+   * - 1-2 failures: -5
+   * - 3-5 failures: -10
+   * - 6+ failures: -20
    */
   private evaluateFailedAttempts(failedAttempts: number): number {
     if (failedAttempts === 0) {
       return 0;
     } else if (failedAttempts <= 2) {
-      return 10;
+      return -5;
     } else if (failedAttempts <= 5) {
-      return 25;
+      return -10;
     } else {
-      return 40;
+      return -20;
     }
   }
 
   /**
-   * Assign trust level based on risk score
-   * - Score 0-20: FULL_TRUST
-   * - Score 21-40: LIMITED_TRUST
-   * - Score 41-60: UNVERIFIED
-   * - Score 61+: HIGH_RISK
+   * Assign trust level based on trust score (higher = more trusted, max 100)
+   * - Score 80–100: FULL_TRUST
+   * - Score 60–79:  LIMITED_TRUST
+   * - Score 40–59:  UNVERIFIED
+   * - Score <40:    HIGH_RISK
    */
   private assignTrustLevel(score: number): SessionTrustLevel {
-    if (score <= 20) {
+    if (score >= 80) {
       return SessionTrustLevel.FULL_TRUST;
-    } else if (score <= 40) {
+    } else if (score >= 60) {
       return SessionTrustLevel.LIMITED_TRUST;
-    } else if (score <= 60) {
+    } else if (score >= 40) {
       return SessionTrustLevel.UNVERIFIED;
     } else {
       return SessionTrustLevel.HIGH_RISK;
@@ -383,11 +383,11 @@ export class RiskEngine {
    */
   private calculateIPReputationScore(reputation: IPReputationResult): number {
     if (reputation.isMalicious) {
-      return 40;
+      return 0;
     } else if (reputation.isProxy) {
       return 10;
     } else {
-      return 0;
+      return 20;
     }
   }
 
@@ -422,33 +422,33 @@ export class RiskEngine {
 
   // Helper methods for risk factor details
   private getDeviceFamiliarityDetails(score: number): string {
-    if (score === 0) return 'Trusted device';
-    if (score === 15) return 'Known but not trusted device';
+    if (score === 40) return 'Trusted device';
+    if (score === 20) return 'Known but not trusted device';
     return 'Unknown device';
   }
 
   private getGeographicAnomalyDetails(score: number): string {
-    if (score === 0) return 'Same country as usual';
-    if (score === 20) return 'Different country';
+    if (score === 30) return 'Same country as usual';
+    if (score === 10) return 'Different country';
     return 'High-risk country';
   }
 
   private getIPReputationDetails(score: number): string {
-    if (score === 0) return 'Clean IP';
+    if (score === 20) return 'Clean IP';
     if (score === 10) return 'Proxy/VPN detected';
     return 'Known malicious IP';
   }
 
   private getLoginVelocityDetails(score: number): string {
-    if (score === 0) return 'Normal login pattern';
-    if (score === 15) return 'Multiple logins in 5 minutes';
+    if (score === 10) return 'Normal login pattern';
+    if (score === 5) return 'Multiple logins in 5 minutes';
     return 'Multiple logins in 1 minute';
   }
 
   private getFailedAttemptsDetails(score: number): string {
     if (score === 0) return 'No recent failures';
-    if (score === 10) return '1-2 recent failures';
-    if (score === 25) return '3-5 recent failures';
+    if (score === -5) return '1-2 recent failures';
+    if (score === -10) return '3-5 recent failures';
     return '6+ recent failures';
   }
 }
